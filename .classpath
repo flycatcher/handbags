@@ -5,5 +5,6 @@
 	<classpathentry kind="lib" path="/home/valentcraft/apps/javacv/javacpp.jar"/>
 	<classpathentry kind="lib" path="/home/valentcraft/apps/javacv/javacv.jar"/>
 	<classpathentry kind="lib" path="/home/valentcraft/apps/javacv/javacv-linux-x86_64.jar"/>
+	<classpathentry kind="lib" path="/home/valentcraft/apps/commons-cli-1.2/commons-cli-1.2.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>
