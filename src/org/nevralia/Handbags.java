@@ -14,7 +14,7 @@ import static com.googlecode.javacv.cpp.opencv_objdetect.*;
 /**
  * 
  * @author Jun Mei
- *
+ * 
  */
 public class Handbags {
 
@@ -26,6 +26,8 @@ public class Handbags {
     private static final String OPT_WIDTH_LONG = "width";
     private static final String OPT_HEIGHT_SHORT = "h";
     private static final String OPT_HEIGHT_LONG = "height";
+    private static final String OPT_SCALE_SHORT = "s";
+    private static final String OPT_SCALE_LONG = "scale";
 
     /**
      * Enumerations for exit codes
@@ -64,14 +66,16 @@ public class Handbags {
         Collection<String> imagePaths = initImages(cl);
         int width = initWidth(cl);
         int height = initHeight(cl);
+        float scale = initScale(cl);
 
-        test(classifier, imagePaths, width, height);
+        test(classifier, imagePaths, width, height, scale);
     }
 
-    private static void test(CascadeClassifier classifier, Collection<String> imagePaths, int width, int height) {
-        final int OUT_FACTOR = 8;
+    private static void test(CascadeClassifier classifier, Collection<String> imagePaths, int width, int height, float scale) {
         final CvSize minSize = cvSize(width, height);
-        final CvSize maxSize = cvSize(width * OUT_FACTOR, height * OUT_FACTOR);
+        int maxWidth = (int)(width * scale);
+        int maxHeight = (int)(height * scale);
+        final CvSize maxSize = cvSize(maxWidth, maxHeight);
 
         for (String imagePath : imagePaths) {
             IplImage image = cvLoadImage(imagePath, CV_LOAD_IMAGE_GRAYSCALE);
@@ -89,6 +93,27 @@ public class Handbags {
             System.out.printf(" [%1$d %2$d %3$d %4$d]", match.x(), match.y(), match.width(), match.height());
         }
         System.out.println("");
+    }
+
+    /**
+     * Parses and returns the maximum scaling factor from the command line
+     * 
+     * @param cl
+     * @return
+     */
+    private static float initScale(CommandLine cl) {
+        final float DEFAULT_SCALE_FACTOR = 10f;
+        float result = DEFAULT_SCALE_FACTOR;
+
+        if (cl.hasOption(OPT_SCALE_SHORT)) {
+            String str = cl.getOptionValue(OPT_SCALE_SHORT);
+            result = Float.parseFloat(str);
+        } else if (cl.hasOption(OPT_SCALE_LONG)) {
+            String str = cl.getOptionValue(OPT_SCALE_LONG);
+            result = Float.parseFloat(str);
+        }
+
+        return (result > 1f) ? result : DEFAULT_SCALE_FACTOR;
     }
 
     private static int initHeight(final CommandLine cl) {
@@ -182,7 +207,7 @@ public class Handbags {
 
     private static void printUsage(Options opts) {
         HelpFormatter help = new HelpFormatter();
-        help.printHelp("", opts);
+        help.printHelp("handbag -i [filename] -c [filename] -w [integer] -h [integer] -s [positive number, default 10]", opts);
     }
 
     private static Options initOptions() {
@@ -191,6 +216,7 @@ public class Handbags {
         results.addOption(OPT_INFO_SHORT, OPT_INFO_LONG, true, "Collection of input files");
         results.addOption(OPT_WIDTH_SHORT, OPT_WIDTH_LONG, true, "Minimum object width");
         results.addOption(OPT_HEIGHT_SHORT, OPT_HEIGHT_LONG, true, "Minimum object height");
+        results.addOption(OPT_SCALE_SHORT, OPT_SCALE_LONG, true, "Scale factor for the maximum object size (default 10)");
         return results;
     }
 }
