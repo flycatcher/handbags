@@ -1,21 +1,49 @@
+/**
+ * Copyright (c) 2012 Jun Mei
+ * 
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ * 
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+
 package org.nevralia;
 
-import java.io.*;
-import java.util.*;
+import static com.googlecode.javacv.cpp.opencv_core.cvSize;
 
-import org.apache.commons.cli.*;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.concurrent.ForkJoinPool;
 
-import com.googlecode.javacv.cpp.opencv_core.*;
+import org.apache.commons.cli.CommandLine;
+import org.apache.commons.cli.CommandLineParser;
+import org.apache.commons.cli.GnuParser;
+import org.apache.commons.cli.HelpFormatter;
+import org.apache.commons.cli.Options;
+import org.apache.commons.cli.ParseException;
+
+import com.googlecode.javacv.cpp.opencv_core.CvSize;
 import com.googlecode.javacv.cpp.opencv_objdetect.CascadeClassifier;
-import static com.googlecode.javacv.cpp.opencv_highgui.*;
-import static com.googlecode.javacv.cpp.opencv_core.*;
-import static com.googlecode.javacv.cpp.opencv_objdetect.*;
 
-/**
- * 
- * @author Jun Mei
- * 
- */
 public class Handbags {
 
     private static final String OPT_CASCADE_SHORT = "c";
@@ -51,7 +79,8 @@ public class Handbags {
      * @throws ParseException
      * @throws FileNotFoundException
      */
-    public static void main(String[] args) throws ParseException, FileNotFoundException {
+    public static void main(String[] args) throws ParseException,
+        FileNotFoundException {
         Options opts = initOptions();
 
         if (args.length == 0) {
@@ -63,36 +92,43 @@ public class Handbags {
         CommandLineParser parser = new GnuParser();
         CommandLine cl = parser.parse(opts, args);
         CascadeClassifier classifier = initClassifier(cl);
-        Collection<String> imagePaths = initImages(cl);
+        List<String> imagePaths = initImages(cl);
+        Collections.shuffle(imagePaths);
         int width = initWidth(cl);
         int height = initHeight(cl);
         float scale = initScale(cl);
 
-        test(classifier, imagePaths, width, height, scale);
+        run(classifier, imagePaths, width, height, scale);
     }
 
-    private static void test(CascadeClassifier classifier, Collection<String> imagePaths, int width, int height, float scale) {
-        final CvSize minSize = cvSize(width, height);
-        int maxWidth = (int)(width * scale);
-        int maxHeight = (int)(height * scale);
-        final CvSize maxSize = cvSize(maxWidth, maxHeight);
+    /**
+     * Uses the given classifier to identify relevant objects for each image in
+     * the given list
+     * 
+     * @param classifier
+     *            The cascade classifier
+     * @param images
+     *            The list of images to be analyzed
+     * @param w
+     *            Minimum possible object width (number of pixels); objects
+     *            smaller than this will be ignored
+     * @param h
+     *            Minimum possible object height (number of pixels); objects
+     *            smaller than this will be ignored
+     * @param scale
+     *            A multiplier used to determine the maximum possible object
+     *            size; objects larger than that will be ignored
+     */
+    private static void run(final CascadeClassifier classifier,
+        final List<String> images, final int w, final int h, float scale) {
+        final CvSize min = cvSize(w, h);
+        final CvSize max = cvSize((int) (w * scale), (int) (h * scale));
 
-        for (String imagePath : imagePaths) {
-            IplImage image = cvLoadImage(imagePath, CV_LOAD_IMAGE_GRAYSCALE);
-            CvRect matches = new CvRect(null);
-            classifier.detectMultiScale(image, matches, 1.1, 2, 0 | CV_HAAR_SCALE_IMAGE, minSize, maxSize);
-            printResults(imagePath, matches);
-        }
-    }
+        ForkJoinPool pool = new ForkJoinPool();
+        ImageProcessor action = new ImageProcessor(classifier, images, 0,
+            images.size(), min, max);
 
-    private static void printResults(String imagePath, CvRect matches) {
-        int numMatches = matches.capacity();
-        System.out.printf("%1$s %2$d match(es)", imagePath, numMatches);
-        for (int i = 0; i < numMatches; ++i) {
-            CvRect match = matches.position(i);
-            System.out.printf(" [%1$d %2$d %3$d %4$d]", match.x(), match.y(), match.width(), match.height());
-        }
-        System.out.println("");
+        pool.invoke(action);
     }
 
     /**
@@ -101,7 +137,7 @@ public class Handbags {
      * @param cl
      * @return
      */
-    private static float initScale(CommandLine cl) {
+    private static float initScale(final CommandLine cl) {
         final float DEFAULT_SCALE_FACTOR = 10f;
         float result = DEFAULT_SCALE_FACTOR;
 
@@ -144,7 +180,7 @@ public class Handbags {
         return result;
     }
 
-    private static Collection<String> initImages(final CommandLine cl) {
+    private static List<String> initImages(final CommandLine cl) {
         String sourceFilePath = "";
 
         if (cl.hasOption(OPT_INFO_SHORT))
@@ -154,19 +190,10 @@ public class Handbags {
         else
             sourceFilePath = "default.dat";
 
-        FileReader reader = null;
+        List<String> result = new ArrayList<>();
 
-        try {
-            reader = new FileReader(sourceFilePath);
-        } catch (FileNotFoundException ex) {
-            System.err.printf("Cannot find info file %1$s\n", sourceFilePath);
-            System.exit(ExitCode.Error.index());
-        }
-
-        BufferedReader buffer = new BufferedReader(reader);
-        List<String> result = new ArrayList<String>();
-
-        try {
+        try (BufferedReader buffer = new BufferedReader(new FileReader(
+            sourceFilePath))) {
             String line = null;
             while ((line = buffer.readLine()) != null) {
                 File file = new File(line);
@@ -175,6 +202,9 @@ public class Handbags {
                     result.add(line);
                 }
             }
+        } catch (FileNotFoundException ex) {
+            System.err.printf("Cannot find info file %1$s\n", sourceFilePath);
+            System.exit(ExitCode.Error.index());
         } catch (IOException e) {
             e.printStackTrace();
             System.exit(ExitCode.Error.index());
@@ -191,7 +221,8 @@ public class Handbags {
         else if (cl.hasOption(OPT_CASCADE_LONG))
             cascadeFilePath = cl.getOptionValue(OPT_CASCADE_LONG);
         else {
-            System.out.println("Missing argument for cascade file. Assume demo.");
+            System.out
+                .println("Missing argument for cascade file. Assume demo.");
             cascadeFilePath = "demo.xml";
         }
 
@@ -207,16 +238,23 @@ public class Handbags {
 
     private static void printUsage(Options opts) {
         HelpFormatter help = new HelpFormatter();
-        help.printHelp("handbag -i [filename] -c [filename] -w [integer] -h [integer] -s [positive number, default 10]", opts);
+        help.printHelp(
+            "handbag -i [filename] -c [filename] -w [integer] -h [integer] -s [positive number, default 10]",
+            opts);
     }
 
     private static Options initOptions() {
         Options results = new Options();
-        results.addOption(OPT_CASCADE_SHORT, OPT_CASCADE_LONG, true, "Cascade file with classifiers");
-        results.addOption(OPT_INFO_SHORT, OPT_INFO_LONG, true, "Collection of input files");
-        results.addOption(OPT_WIDTH_SHORT, OPT_WIDTH_LONG, true, "Minimum object width");
-        results.addOption(OPT_HEIGHT_SHORT, OPT_HEIGHT_LONG, true, "Minimum object height");
-        results.addOption(OPT_SCALE_SHORT, OPT_SCALE_LONG, true, "Scale factor for the maximum object size (default 10)");
+        results.addOption(OPT_CASCADE_SHORT, OPT_CASCADE_LONG, true,
+            "Cascade file with classifiers");
+        results.addOption(OPT_INFO_SHORT, OPT_INFO_LONG, true,
+            "Collection of input files");
+        results.addOption(OPT_WIDTH_SHORT, OPT_WIDTH_LONG, true,
+            "Minimum object width");
+        results.addOption(OPT_HEIGHT_SHORT, OPT_HEIGHT_LONG, true,
+            "Minimum object height");
+        results.addOption(OPT_SCALE_SHORT, OPT_SCALE_LONG, true,
+            "Scale factor for the maximum object size (default 10)");
         return results;
     }
 }
