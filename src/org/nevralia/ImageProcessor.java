@@ -22,9 +22,10 @@
 
 package org.nevralia;
 
+import static com.googlecode.javacv.cpp.opencv_core.CV_RGB;
+import static com.googlecode.javacv.cpp.opencv_core.cvRect;
 import static com.googlecode.javacv.cpp.opencv_core.cvRectangle;
 import static com.googlecode.javacv.cpp.opencv_core.cvReleaseImage;
-import static com.googlecode.javacv.cpp.opencv_core.CV_RGB;
 import static com.googlecode.javacv.cpp.opencv_highgui.CV_LOAD_IMAGE_GRAYSCALE;
 import static com.googlecode.javacv.cpp.opencv_highgui.cvLoadImage;
 import static com.googlecode.javacv.cpp.opencv_highgui.cvSaveImage;
@@ -141,12 +142,12 @@ public class ImageProcessor extends RecursiveAction {
             image = cvLoadImage(filePath);
 
             for (int i = 0; i < objects.size(); ++i) {
-                int j = i % COLORS.size();
-                CvScalar color = COLORS.get(j);
                 CvRect obj = objects.get(i);
                 CvPoint topLeftCorner = new CvPoint(obj.x(), obj.y());
                 CvPoint bottomRightCorner = new CvPoint(obj.x() + obj.width(),
                     obj.y() + obj.height());
+                int j = i % COLORS.size();
+                CvScalar color = COLORS.get(j);
                 cvRectangle(image, topLeftCorner, bottomRightCorner, color,
                     thinLine, connectedLine, noShift);
             }
@@ -205,7 +206,8 @@ public class ImageProcessor extends RecursiveAction {
         List<CvRect> result = new ArrayList<>(numObjects);
 
         for (int i = 0; i < numObjects; ++i) {
-            result.add(objects.position(i));
+            CvRect o = objects.position(i);
+            result.add(cvRect(o.x(), o.y(), o.width(), o.height()));
         }
 
         return result;
