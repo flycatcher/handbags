@@ -103,7 +103,7 @@ public class ImageProcessor extends RecursiveAction {
     @Override
     protected void compute() {
         final short threshold = 16;
-        if (_start - _end > threshold) {
+        if (_end - _start > threshold) {
             int midPoint = (_start + _end) >>> 1;
             ImageProcessor firstHalf = new ImageProcessor(_classifier,
                 _imagePaths, _start, midPoint, _minSize, _maxSize);
