@@ -132,7 +132,7 @@ public class ImageProcessor extends RecursiveAction {
      * @param objects
      */
     private static void draw(String filePath, List<CvRect> objects) {
-        final int thinLine = 1;
+        final int thinLine = 2;
         final int connectedLine = 4;
         final int noShift = 0;
 
